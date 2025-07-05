@@ -1,0 +1,51 @@
+# LastServer Configuration
+
+# MySQL connection settings
+mysql:
+  host: "lastserver-mysql"
+  port: 3306
+  database: "lastserver"
+  username: "lastserver"
+  password: "password"
+  pool-size: 10
+
+# Server to send players to if their last server is unavailable
+fallback-server: "lobby-server"
+
+# Servers that should always send players to fallback (temp/event servers)
+blacklisted-servers:
+  - "event-server"
+  - "temp-build"
+
+# After how many days of inactivity should we send players to fallback instead
+inactive-days: 5
+
+# Permission to bypass last server (always go to fallback)
+bypass-permission: "lastserver.bypass"
+
+# First join behavior
+first-join-server: "lobby-server"
+
+# Maintenance mode settings
+maintenance:
+  enabled: false
+  # Server to send all players to during maintenance
+  maintenance-server: "lobby-server"
+  # Commands to execute when maintenance is enabled (optional)
+  # Use %player% for player name if needed
+  on-enable-commands:
+    - "velocity alert &cMaintenance mode enabled! All players moved to lobby."
+  on-disable-commands:
+    - "velocity alert &aMaintenance mode disabled!"
+
+# Messages (use MiniMessage format)
+messages:
+  sending-last-server: "<gray>Sending you to your last server: <green>{server}</green></gray>"
+  server-offline: "<red>Your last server is offline. Sending you to the lobby.</red>"
+  server-full: "<red>Your last server is full. Sending you to the lobby.</red>"
+  no-permission: "<red>You don't have permission to join that server.</red>"
+  first-join: "<green>Welcome to the network!</green>"
+  maintenance-kick: "<red>The network is currently in maintenance mode.</red>"
+
+# Debug mode
+debug: false
