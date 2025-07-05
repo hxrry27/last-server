@@ -86,8 +86,21 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <minimizeJar>true</minimizeJar>
+                            <minimizeJar>false</minimizeJar>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
                             <relocations>
                                 <relocation>
                                     <pattern>com.zaxxer.hikari</pattern>
@@ -96,6 +109,10 @@
                                 <relocation>
                                     <pattern>com.mysql</pattern>
                                     <shadedPattern>com.example.lastserver.libs.mysql</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.yaml</pattern>
+                                    <shadedPattern>com.example.lastserver.libs.yaml</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
