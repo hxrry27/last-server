@@ -5,6 +5,7 @@ import com.example.lastserver.utils.MessageUtil;
 import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.PostLoginEvent;
+import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
@@ -19,133 +20,68 @@ public class ConnectionListener {
     }
 
     @Subscribe(order = PostOrder.EARLY)
-    public void onPostLogin(PostLoginEvent event) {
+    public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
         Player player = event.getPlayer();
         String uuid = player.getUniqueId().toString();
         String username = player.getUsername();
         
-        plugin.getServer().getScheduler()
-            .buildTask(plugin, () -> handlePlayerLogin(player, uuid, username))
-            .delay(100, TimeUnit.MILLISECONDS)
-            .schedule();
-    }
-
-    private void handlePlayerLogin(Player player, String uuid, String username) {
         if (plugin.getConfiguration().isDebug()) {
-            plugin.getLogger().info("Processing login for player: {}", username);
+            plugin.getLogger().info("Processing initial server selection for player: {}", username);
         }
 
+        RegisteredServer targetServer = determineTargetServer(player, uuid, username);
+        if (targetServer != null) {
+            event.setInitialServer(targetServer);
+            if (plugin.getConfiguration().isDebug()) {
+                plugin.getLogger().info("Setting initial server for {} to: {}", username, targetServer.getServerInfo().getName());
+            }
+        }
+    }
+
+    private RegisteredServer determineTargetServer(Player player, String uuid, String username) {
+        // Maintenance mode
         if (plugin.getConfiguration().isMaintenanceEnabled()) {
-            sendToMaintenanceServer(player);
-            return;
+            return plugin.getServer().getServer(plugin.getConfiguration().getMaintenanceServer()).orElse(null);
         }
 
+        // Bypass permission
         if (player.hasPermission(plugin.getConfiguration().getBypassPermission())) {
-            sendToFallbackServer(player, "bypass");
-            return;
+            return plugin.getServer().getServer(plugin.getConfiguration().getFallbackServer()).orElse(null);
         }
 
-        plugin.getServerManager().getLastServer(uuid).thenAccept(lastServer -> {
-            if (lastServer == null) {
-                sendToFirstJoinServer(player);
-                return;
-            }
-
-            if (plugin.getConfiguration().getBlacklistedServers().contains(lastServer)) {
-                sendToFallbackServer(player, "blacklisted");
-                return;
-            }
-
-            if (!isValidServerName(lastServer) || !plugin.getServerManager().serverExists(lastServer)) {
-                sendToFallbackServer(player, "not_exists");
-                return;
-            }
-
-            plugin.getServerManager().isServerAvailable(lastServer).thenAccept(available -> {
-                if (!available) {
-                    sendToFallbackServer(player, "offline");
-                    return;
-                }
-
+        // Try to get last server synchronously (this will use cache or return null)
+        try {
+            String lastServer = plugin.getServerManager().getLastServer(uuid).get(100, TimeUnit.MILLISECONDS);
+            
+            if (lastServer != null && 
+                !plugin.getConfiguration().getBlacklistedServers().contains(lastServer) &&
+                isValidServerName(lastServer) &&
+                plugin.getServerManager().serverExists(lastServer) &&
+                hasServerPermission(player, lastServer)) {
+                
                 RegisteredServer server = plugin.getServerManager().getServer(lastServer);
-                if (server == null) {
-                    sendToFallbackServer(player, "not_found");
-                    return;
+                if (server != null) {
+                    player.sendMessage(MessageUtil.formatWithServer(
+                        plugin.getConfiguration().getMessage("sending-last-server"),
+                        lastServer
+                    ));
+                    return server;
                 }
-
-                if (hasServerPermission(player, lastServer)) {
-                    sendToLastServer(player, server);
-                } else {
-                    sendToFallbackServer(player, "no_permission");
-                }
-            });
-        });
-    }
-
-    private void sendToLastServer(Player player, RegisteredServer server) {
-        if (plugin.getConfiguration().isDebug()) {
-            plugin.getLogger().info("Sending {} to last server: {}", player.getUsername(), server.getServerInfo().getName());
+            }
+        } catch (Exception e) {
+            // Database timeout or error, fall back to first join server
+            if (plugin.getConfiguration().isDebug()) {
+                plugin.getLogger().info("Could not retrieve last server for {}, using first join server", username);
+            }
         }
 
-        player.sendMessage(MessageUtil.formatWithServer(
-            plugin.getConfiguration().getMessage("sending-last-server"),
-            server.getServerInfo().getName()
-        ));
-
-        player.createConnectionRequest(server).fireAndForget();
-    }
-
-    private void sendToFallbackServer(Player player, String reason) {
-        RegisteredServer fallback = plugin.getServer().getServer(plugin.getConfiguration().getFallbackServer()).orElse(null);
-        if (fallback == null) {
-            plugin.getLogger().error("Fallback server '{}' not found!", plugin.getConfiguration().getFallbackServer());
-            player.disconnect(MessageUtil.format("<red>Server configuration error. Please contact an administrator.</red>"));
-            return;
-        }
-
-        if (plugin.getConfiguration().isDebug()) {
-            plugin.getLogger().info("Sending {} to fallback server due to: {}", player.getUsername(), reason);
-        }
-
-        switch (reason) {
-            case "offline" -> player.sendMessage(MessageUtil.format(plugin.getConfiguration().getMessage("server-offline")));
-            case "no_permission" -> player.sendMessage(MessageUtil.format(plugin.getConfiguration().getMessage("no-permission")));
-            case "full" -> player.sendMessage(MessageUtil.format(plugin.getConfiguration().getMessage("server-full")));
-        }
-
-        player.createConnectionRequest(fallback).fireAndForget();
-    }
-
-    private void sendToFirstJoinServer(Player player) {
-        RegisteredServer firstJoin = plugin.getServer().getServer(plugin.getConfiguration().getFirstJoinServer()).orElse(null);
-        if (firstJoin == null) {
-            plugin.getLogger().error("First join server '{}' not found!", plugin.getConfiguration().getFirstJoinServer());
-            sendToFallbackServer(player, "fallback");
-            return;
-        }
-
-        if (plugin.getConfiguration().isDebug()) {
-            plugin.getLogger().info("Sending {} to first join server", player.getUsername());
-        }
-
+        // Default to first join server
         player.sendMessage(MessageUtil.format(plugin.getConfiguration().getMessage("first-join")));
-        player.createConnectionRequest(firstJoin).fireAndForget();
+        return plugin.getServer().getServer(plugin.getConfiguration().getFirstJoinServer()).orElse(
+            plugin.getServer().getServer(plugin.getConfiguration().getFallbackServer()).orElse(null)
+        );
     }
 
-    private void sendToMaintenanceServer(Player player) {
-        RegisteredServer maintenance = plugin.getServer().getServer(plugin.getConfiguration().getMaintenanceServer()).orElse(null);
-        if (maintenance == null) {
-            plugin.getLogger().error("Maintenance server '{}' not found!", plugin.getConfiguration().getMaintenanceServer());
-            player.disconnect(MessageUtil.format(plugin.getConfiguration().getMessage("maintenance-kick")));
-            return;
-        }
-
-        if (plugin.getConfiguration().isDebug()) {
-            plugin.getLogger().info("Sending {} to maintenance server", player.getUsername());
-        }
-
-        player.createConnectionRequest(maintenance).fireAndForget();
-    }
 
     private boolean hasServerPermission(Player player, String serverName) {
         return player.hasPermission("server." + serverName) || player.hasPermission("server.*");
