@@ -36,7 +36,7 @@ public class ConnectionListener {
             plugin.getLogger().error("determineTargetServer returned null for " + username);
             
             // Try each fallback option
-            targetServer = plugin.getServer().getServer("lobby").orElse(null);
+            targetServer = plugin.getServer().getServer("resource").orElse(null);
             
             if (targetServer == null) {
                 // Get literally ANY server
@@ -55,52 +55,81 @@ public class ConnectionListener {
     }
 
     private RegisteredServer determineTargetServer(Player player, String uuid, String username) {
+        plugin.getLogger().info("=== determineTargetServer called for {} ===", username);
+        
         // Maintenance mode
         if (plugin.getConfiguration().isMaintenanceEnabled()) {
+            plugin.getLogger().info("Maintenance mode is enabled");
             return plugin.getServer().getServer(plugin.getConfiguration().getMaintenanceServer()).orElse(null);
         }
 
+        plugin.getLogger().info("Checking bypass permission...");
         // Bypass permission
         if (player.hasPermission(plugin.getConfiguration().getBypassPermission())) {
+            plugin.getLogger().info("Player has bypass permission!");
             return plugin.getServer().getServer(plugin.getConfiguration().getFallbackServer()).orElse(null);
         }
+        plugin.getLogger().info("Player does NOT have bypass permission");
 
+        plugin.getLogger().info("Attempting to retrieve last server from database...");
         // Try to get last server synchronously (this will use cache or return null)
         try {
-            String lastServer = plugin.getServerManager().getLastServer(uuid).get(100, TimeUnit.MILLISECONDS);
+            plugin.getLogger().info("Calling getLastServer for UUID: {}", uuid);
+            String lastServer = plugin.getServerManager().getLastServer(uuid).get(1000, TimeUnit.MILLISECONDS);
+            plugin.getLogger().info("Database returned: '{}'", lastServer);
             
-            if (lastServer != null && 
-                !plugin.getConfiguration().getBlacklistedServers().contains(lastServer) &&
-                isValidServerName(lastServer) &&
-                plugin.getServerManager().serverExists(lastServer) &&
-                hasServerPermission(player, lastServer)) {
+            if (lastServer == null) {
+                plugin.getLogger().info("Database returned null - player has no saved server");
+            } else {
+                // Check each validation step
+                plugin.getLogger().info("Validating last server: {}", lastServer);
                 
-                RegisteredServer server = plugin.getServerManager().getServer(lastServer);
-                if (server != null) {
-                    player.sendMessage(MessageUtil.formatWithServer(
-                        plugin.getConfiguration().getMessage("sending-last-server"),
-                        lastServer
-                    ));
-                    return server;
+                boolean isBlacklisted = plugin.getConfiguration().getBlacklistedServers().contains(lastServer);
+                plugin.getLogger().info("- Is blacklisted? {}", isBlacklisted);
+                
+                boolean isValidName = isValidServerName(lastServer);
+                plugin.getLogger().info("- Valid server name? {}", isValidName);
+                
+                boolean serverExists = plugin.getServerManager().serverExists(lastServer);
+                plugin.getLogger().info("- Server exists? {}", serverExists);
+                
+                // Removed permission check - if they were on the server, they can rejoin it
+                
+                if (!isBlacklisted && isValidName && serverExists) {
+                    RegisteredServer server = plugin.getServerManager().getServer(lastServer);
+                    if (server != null) {
+                        plugin.getLogger().info("All checks passed! Returning server: {}", lastServer);
+                        player.sendMessage(MessageUtil.formatWithServer(
+                            plugin.getConfiguration().getMessage("sending-last-server"),
+                            lastServer
+                        ));
+                        return server;
+                    } else {
+                        plugin.getLogger().warn("getServer() returned null for: {}", lastServer);
+                    }
+                } else {
+                    plugin.getLogger().info("Validation failed for server: {} (blacklisted={}, validName={}, exists={})", 
+                    lastServer, isBlacklisted, isValidName, serverExists);
                 }
             }
         } catch (Exception e) {
             // Database timeout or error, fall back to first join server
+            plugin.getLogger().error("Exception while retrieving last server: ", e);
             if (plugin.getConfiguration().isDebug()) {
                 plugin.getLogger().info("Could not retrieve last server for {}, using first join server", username);
             }
         }
 
         // Default to first join server
+        plugin.getLogger().info("Falling back to first join server");
         player.sendMessage(MessageUtil.format(plugin.getConfiguration().getMessage("first-join")));
-        return plugin.getServer().getServer(plugin.getConfiguration().getFirstJoinServer()).orElse(
-            plugin.getServer().getServer(plugin.getConfiguration().getFallbackServer()).orElse(null)
+        String firstJoinServer = plugin.getConfiguration().getFirstJoinServer();
+        String fallbackServer = plugin.getConfiguration().getFallbackServer();
+        plugin.getLogger().info("First join server: '{}', Fallback server: '{}'", firstJoinServer, fallbackServer);
+        
+        return plugin.getServer().getServer(firstJoinServer).orElse(
+            plugin.getServer().getServer(fallbackServer).orElse(null)
         );
-    }
-
-
-    private boolean hasServerPermission(Player player, String serverName) {
-        return player.hasPermission("server." + serverName) || player.hasPermission("server.*");
     }
     
     private boolean isValidServerName(String serverName) {
@@ -114,19 +143,5 @@ public class ConnectionListener {
         }
         
         return trimmed.matches("^[a-zA-Z0-9_-]+$");
-    }
-
-    @Subscribe
-    public void onServerPreConnect(ServerPreConnectEvent event) {
-        if (event.getResult().isAllowed()) {
-            RegisteredServer server = event.getResult().getServer().orElse(null);
-            if (server != null) {
-                String serverName = server.getServerInfo().getName();
-                if (!hasServerPermission(event.getPlayer(), serverName)) {
-                    event.setResult(ServerPreConnectEvent.ServerResult.denied());
-                    event.getPlayer().sendMessage(MessageUtil.format(plugin.getConfiguration().getMessage("no-permission")));
-                }
-            }
-        }
     }
 }
