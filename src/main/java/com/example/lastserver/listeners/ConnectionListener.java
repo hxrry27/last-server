@@ -10,6 +10,8 @@ import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 
+import net.kyori.adventure.text.Component;
+
 import java.util.concurrent.TimeUnit;
 
 public class ConnectionListener {
@@ -21,22 +23,35 @@ public class ConnectionListener {
 
     @Subscribe(order = PostOrder.EARLY)
     public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
-        plugin.getLogger().info("!!! EVENT FIRED FOR: " + event.getPlayer().getUsername()); // ALWAYS SHOWS
+        plugin.getLogger().info("!!! EVENT FIRED FOR: " + event.getPlayer().getUsername());
+        
         Player player = event.getPlayer();
         String uuid = player.getUniqueId().toString();
         String username = player.getUsername();
         
-        if (plugin.getConfiguration().isDebug()) {
-            plugin.getLogger().info("Processing initial server selection for player: {}", username);
-        }
-
         RegisteredServer targetServer = determineTargetServer(player, uuid, username);
-        if (targetServer != null) {
-            event.setInitialServer(targetServer);
-            if (plugin.getConfiguration().isDebug()) {
-                plugin.getLogger().info("Setting initial server for {} to: {}", username, targetServer.getServerInfo().getName());
+        
+        // CRITICAL SAFETY CHECK
+        if (targetServer == null) {
+            plugin.getLogger().error("determineTargetServer returned null for " + username);
+            
+            // Try each fallback option
+            targetServer = plugin.getServer().getServer("lobby").orElse(null);
+            
+            if (targetServer == null) {
+                // Get literally ANY server
+                targetServer = plugin.getServer().getAllServers().stream().findFirst().orElse(null);
+            }
+            
+            if (targetServer == null) {
+                plugin.getLogger().error("CRITICAL: No servers available at all!");
+                event.getPlayer().disconnect(Component.text("No servers available"));
+                return;
             }
         }
+        
+        plugin.getLogger().info("Setting initial server to: " + targetServer.getServerInfo().getName());
+        event.setInitialServer(targetServer);
     }
 
     private RegisteredServer determineTargetServer(Player player, String uuid, String username) {
