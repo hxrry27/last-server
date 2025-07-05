@@ -21,6 +21,7 @@ public class ConnectionListener {
 
     @Subscribe(order = PostOrder.EARLY)
     public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
+        plugin.getLogger().info("!!! EVENT FIRED FOR: " + event.getPlayer().getUsername()); // ALWAYS SHOWS
         Player player = event.getPlayer();
         String uuid = player.getUniqueId().toString();
         String username = player.getUsername();
