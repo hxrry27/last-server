@@ -67,6 +67,3 @@ Thumbs.db
 # Local configuration files
 *.local
 local.properties
-
-# Claude AI CLI folder
-.claude/
