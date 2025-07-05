@@ -45,6 +45,7 @@ public class MySQL {
     public boolean connect() {
         try {
             HikariConfig config = new HikariConfig();
+            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             config.setJdbcUrl("jdbc:mysql://" + plugin.getConfiguration().getMysqlHost() + ":" + 
                 plugin.getConfiguration().getMysqlPort() + "/" + plugin.getConfiguration().getMysqlDatabase() + 
                 "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
