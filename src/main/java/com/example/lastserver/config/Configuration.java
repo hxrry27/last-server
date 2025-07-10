@@ -37,6 +37,12 @@ public class Configuration {
     private String maintenanceServer;
     private List<String> onEnableCommands;
     private List<String> onDisableCommands;
+
+    // Discord settings
+    private boolean discordEnabled;
+    private String discordWebhookUrl;
+    private String firstTimeAnnounceServer;
+    private Map<String, String> serverDisplayNames;
     
     // Messages
     private Map<String, String> messages;
@@ -95,6 +101,12 @@ public class Configuration {
             maintenanceServer = (String) maintenance.get("maintenance-server");
             onEnableCommands = (List<String>) maintenance.getOrDefault("on-enable-commands", Collections.emptyList());
             onDisableCommands = (List<String>) maintenance.getOrDefault("on-disable-commands", Collections.emptyList());
+
+            Map<String, Object> discord = (Map<String, Object>) config.getOrDefault("discord", new HashMap<>());
+            discordEnabled = (Boolean) discord.getOrDefault("enabled", false);
+            discordWebhookUrl = (String) discord.getOrDefault("webhook-url", "");
+            firstTimeAnnounceServer = (String) discord.getOrDefault("first-time-announce-server", "");
+            serverDisplayNames = (Map<String, String>) discord.getOrDefault("server-display-names", new HashMap<>());
             
             // Parse messages
             Map<String, String> msgConfig = (Map<String, String>) config.get("messages");
@@ -153,6 +165,22 @@ public class Configuration {
 
     public String getBypassPermission() {
         return bypassPermission;
+    }
+
+    public boolean isDiscordEnabled() {
+        return discordEnabled;
+    }
+
+    public String getDiscordWebhookUrl() {
+        return discordWebhookUrl;
+    }
+    
+    public String getFirstTimeAnnounceServer() {
+        return firstTimeAnnounceServer;
+    }
+
+    public Map<String, String> getServerDisplayNames() {
+        return serverDisplayNames;
     }
 
     public String getFirstJoinServer() {

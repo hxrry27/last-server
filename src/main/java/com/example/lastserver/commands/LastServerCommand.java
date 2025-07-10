@@ -25,7 +25,7 @@ public class LastServerCommand implements SimpleCommand {
         CommandSource source = invocation.source();
         String[] args = invocation.arguments();
 
-        if (!(source instanceof Player player)) {
+        if (!(source instanceof @SuppressWarnings("unused") Player player)) {
             if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
                 source.sendMessage(MessageUtil.format("<yellow>LastServer Commands:</yellow>"));
                 source.sendMessage(MessageUtil.format("<gray>/lastserver reload - Reload configuration</gray>"));

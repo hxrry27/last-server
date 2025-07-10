@@ -38,6 +38,26 @@ maintenance:
   on-disable-commands:
     - "velocity alert &aMaintenance mode disabled!"
 
+# Discord Integration Settings
+discord:
+  # Enable Discord notifications
+  enabled: true
+  
+  # Discord webhook URL from your channel settings
+  # Right-click channel → Integrations → Webhooks → New Webhook → Copy Webhook URL
+  webhook-url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+  
+  # Which server should show "joined for the first time!" message
+  # Leave empty to disable first-time announcements
+  first-time-announce-server: "smp"
+  
+  # Custom display names for servers in Discord messages
+  server-display-names:
+    smp: "Survival"
+    creative: "Creative"
+    resource: "Resource World"
+    lobby-server: "Lobby"
+
 # Messages (use MiniMessage format)
 messages:
   sending-last-server: "<gray>Sending you to your last server: <green>{server}</green></gray>"

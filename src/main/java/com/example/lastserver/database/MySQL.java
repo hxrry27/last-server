@@ -21,6 +21,7 @@ public class MySQL {
             username VARCHAR(16) NOT NULL,
             server_name VARCHAR(50) NOT NULL,
             last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            first_joined TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_last_seen (last_seen)
         )
         """;
@@ -36,6 +37,10 @@ public class MySQL {
     
     private static final String DELETE_OLD_ENTRIES = """
         DELETE FROM last_server WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 DAY)
+        """;
+
+    private static final String CHECK_FIRST_TIME = """
+        SELECT COUNT(*) as count FROM last_server WHERE uuid = ?
         """;
 
     public MySQL(LastServer plugin) {
@@ -74,6 +79,18 @@ public class MySQL {
             try (Connection conn = dataSource.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(CREATE_TABLE)) {
                 stmt.executeUpdate();
+            }
+
+            //Migration for 2.0 discord chat integration
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(
+                     "ALTER TABLE last_server ADD COLUMN IF NOT EXISTS first_joined TIMESTAMP DEFAULT CURRENT_TIMESTAMP")) {
+                stmt.executeUpdate();
+            } catch (SQLException e) {
+                // Column might already exist, that's fine
+                if (plugin.getConfiguration().isDebug()) {
+                    plugin.getLogger().info("first_joined column already exists or could not be added");
+                }
             }
             
             plugin.getLogger().info("Successfully connected to MySQL database");
@@ -185,6 +202,30 @@ public class MySQL {
                 plugin.getLogger().error("Failed to get last server for player: " + playerName, e);
             }
             return null;
+        });
+    }
+
+    //discord 2.0 new method for checking first time player
+    public CompletableFuture<Boolean> isFirstTimePlayer(String uuid) {
+        if (uuid == null || uuid.trim().isEmpty()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(CHECK_FIRST_TIME)) {
+                
+                stmt.setString(1, uuid.trim());
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt("count") == 0;
+                    }
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().error("Failed to check first time status for UUID: " + uuid, e);
+            }
+            return false;
         });
     }
 

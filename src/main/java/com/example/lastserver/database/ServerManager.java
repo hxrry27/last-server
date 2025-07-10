@@ -2,7 +2,6 @@ package com.example.lastserver.database;
 
 import com.example.lastserver.LastServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
-import com.velocitypowered.api.proxy.server.ServerInfo;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
